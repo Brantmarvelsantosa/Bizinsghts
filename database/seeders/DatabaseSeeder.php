@@ -28,6 +28,8 @@ class DatabaseSeeder extends Seeder
         CustomerSeeder::class,
         UserSeeder::class,
         OrderSeeder::class,
+        PaymentSeeder::class,
+        OrderItemSeeder::class,
     ]);
     }
 }

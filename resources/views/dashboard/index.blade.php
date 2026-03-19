@@ -98,5 +98,17 @@
         });
     </script>
 
+    <h2 class="text-xl font-bold mt-6">🧠 Business Insights</h2>
+
+    @if(count($insights) > 0)
+        <div class="bg-yellow-100 p-4 rounded">
+            @foreach($insights as $insight)
+                <p>{{ $insight }}</p>
+            @endforeach
+        </div>
+    @else
+        <p>No insights available yet.</p>
+    @endif
+
 </body>
 </html>

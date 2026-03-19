@@ -7,13 +7,15 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Services\InsightService;
 use Illuminate\Support\Facades\DB;
 
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(InsightService $insightService)
     {
+        $insights = $insightService->generateInsights();
         // 💰 Total Revenue (paid orders only)
         $totalRevenue = Order::where('status', 'paid')->sum('total');
 
@@ -67,7 +69,8 @@ class DashboardController extends Controller
             'lowStockProducts',
             'monthlyRevenue',
             'topProducts',
-            'paymentMethods'
+            'paymentMethods',
+            'insights',
         ));
     }
 }
