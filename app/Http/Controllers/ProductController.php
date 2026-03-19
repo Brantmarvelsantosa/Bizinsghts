@@ -54,7 +54,8 @@ class ProductController extends Controller
             'reference' => 'Initial stock'
         ]);
 
-        return redirect()->route('products.index');
+        return redirect()->route('products.index')
+        ->with('success', 'Product created successfully!');
     }
 
     /**
@@ -102,7 +103,8 @@ class ProductController extends Controller
             ]);
         }
 
-        return redirect()->route('products.index');
+        return redirect()->route('products.index')
+        ->with('success', 'Product updated successfully!');
 
     }
 
@@ -111,6 +113,11 @@ class ProductController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $product = Product::findOrFail($id);
+
+        $product->delete();
+
+        return redirect()->route('products.index')
+            ->with('success', 'Product deleted successfully!');
     }
 }

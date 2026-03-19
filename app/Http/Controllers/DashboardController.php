@@ -41,6 +41,14 @@ class DashboardController extends Controller
         ->orderBy('month')
         ->get();
 
+        // Daily revenue trend
+        $dailyRevenue = DB::table('orders')
+        ->selectRaw('DATE(order_date) as date, SUM(total) as revenue')
+        ->where('status', 'paid')
+        ->groupBy('date')
+        ->orderBy('date')
+        ->get();
+
         // 🏆 Best-selling products
         $topProducts = OrderItem::select(
             'product_id',
@@ -71,6 +79,7 @@ class DashboardController extends Controller
             'topProducts',
             'paymentMethods',
             'insights',
+            'dailyRevenue',
         ));
     }
 }

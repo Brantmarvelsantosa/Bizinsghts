@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\OrderItem;
+use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
 
 class InsightService
@@ -13,75 +13,71 @@ class InsightService
     {
         $insights = [];
 
-        // 🔹 1. Low Stock Insight
-        $lowStock = Product::where('stock', '<', 10)->count();
-
-        if ($lowStock > 0) {
-            $insights[] = "⚠️ {$lowStock} products are low in stock. Reorder recommended.";
-        }
-
-        // 🔹 2. Revenue Drop (Month-over-Month)
-        $currentMonth = now()->month;
-        $lastMonth = now()->subMonth()->month;
-
-        $currentRevenue = Order::whereMonth('order_date', $currentMonth)
-            ->where('status', 'paid')
-            ->sum('total');
-
-        $lastRevenue = Order::whereMonth('order_date', $lastMonth)
-            ->where('status', 'paid')
-            ->sum('total');
-
-        if ($lastRevenue > 0) {
-            $change = (($currentRevenue - $lastRevenue) / $lastRevenue) * 100;
-
-            if ($change < -20) {
-                $insights[] = "📉 Revenue dropped by " . round(abs($change), 2) . "% compared to last month.";
-            }
-        }
-
-        // 🔹 3. Pareto Analysis (80/20 Rule)
-        $totalRevenue = OrderItem::sum('subtotal');
-
-        $topProducts = OrderItem::select(
-                'product_id',
-                DB::raw('SUM(subtotal) as revenue')
-            )
+        // 🔹 1. Low Stock + High Demand (IMPORTANT)
+        $topProducts = OrderItem::select('product_id', DB::raw('SUM(quantity) as total_sold'))
             ->groupBy('product_id')
-            ->orderByDesc('revenue')
+            ->orderByDesc('total_sold')
+            ->take(5)
+            ->pluck('product_id');
+
+        $riskyProducts = Product::whereIn('id', $topProducts)
+            ->where('stock', '<', 10)
             ->get();
 
-        $runningRevenue = 0;
-        $topCount = 0;
+        foreach ($riskyProducts as $product) {
+            $insights[] = "⚠️ {$product->name} is low in stock AND high in demand → restock immediately.";
+        }
 
-        foreach ($topProducts as $item) {
-            $runningRevenue += $item->revenue;
-            $topCount++;
+        // 🔹 2. Revenue Trend (Last 7 Days)
+        $last7 = DB::table('orders')
+            ->where('status', 'paid')
+            ->where('order_date', '>=', now()->subDays(7))
+            ->sum('total');
 
-            if ($runningRevenue >= 0.8 * $totalRevenue) {
-                break;
+        $prev7 = DB::table('orders')
+            ->where('status', 'paid')
+            ->whereBetween('order_date', [now()->subDays(14), now()->subDays(7)])
+            ->sum('total');
+
+        if ($prev7 > 0) {
+            $change = (($last7 - $prev7) / $prev7) * 100;
+
+            if ($change > 10) {
+                $insights[] = "📈 Revenue increased by " . round($change, 1) . "% in the last 7 days.";
+            } elseif ($change < -10) {
+                $insights[] = "📉 Revenue dropped by " . round(abs($change), 1) . "% → investigate sales performance.";
             }
         }
 
-        if ($totalRevenue > 0 && ($topCount / max(count($topProducts),1)) <= 0.2) {
-            $insights[] = "📊 Top {$topCount} products generate ~80% of revenue. Focus on best-sellers.";
+        // 🔹 3. Most Profitable Product
+        $topProfit = OrderItem::select('product_id', DB::raw('SUM(profit) as total_profit'))
+            ->groupBy('product_id')
+            ->orderByDesc('total_profit')
+            ->first();
+
+        if ($topProfit) {
+            $insights[] = "💰 Most profitable product ID {$topProfit->product_id} → consider promoting it.";
         }
 
-        // 🔹 4. Repeat Customer Rate
-        $totalCustomers = \App\Models\Customer::count();
+        // 🔹 4. Payment Behavior
+        $topPayment = Payment::select('method', DB::raw('COUNT(*) as total'))
+            ->groupBy('method')
+            ->orderByDesc('total')
+            ->first();
 
-        $repeatCustomers = Order::select('customer_id')
-            ->groupBy('customer_id')
-            ->havingRaw('COUNT(*) > 1')
-            ->get()
-            ->count();
+        if ($topPayment) {
+            $insights[] = "💳 Most used payment method: {$topPayment->method}. Optimize this channel.";
+        }
 
-        if ($totalCustomers > 0) {
-            $rate = ($repeatCustomers / $totalCustomers) * 100;
+        // 🔹 5. Dead Stock (Very important in business)
+        $deadStock = Product::where('stock', '>', 50)
+            ->whereNotIn('id', function ($query) {
+                $query->select('product_id')->from('order_items');
+            })
+            ->get();
 
-            if ($rate < 30) {
-                $insights[] = "👥 Repeat customer rate is low (" . round($rate, 1) . "%). Consider loyalty programs.";
-            }
+        foreach ($deadStock as $product) {
+            $insights[] = "🐢 {$product->name} has high stock but no sales → consider discount or promotion.";
         }
 
         return $insights;

@@ -10,4 +10,13 @@ class InventoryLog extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    protected $fillable = [
+        'product_id',
+        'type',
+        'quantity',
+        'reference',
+    ];
+
+    
 }
