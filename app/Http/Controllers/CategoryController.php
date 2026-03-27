@@ -21,7 +21,7 @@ class CategoryController extends Controller
      */
     public function create()
     {
-        //
+        return view('categories.create');
     }
 
     /**
@@ -33,9 +33,12 @@ class CategoryController extends Controller
             'name' => 'required'
         ]);
 
-        Category::create($request->all());
+        Category::create([
+            'name' => $request->name
+        ]);
 
-        return redirect()->route('categories.index');
+        return redirect()->route('products.create')
+            ->with('success', 'Category added successfully!');
     }
 
     /**

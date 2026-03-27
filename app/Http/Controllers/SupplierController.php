@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 
 class SupplierController extends Controller
@@ -19,7 +20,7 @@ class SupplierController extends Controller
      */
     public function create()
     {
-        //
+        return view('suppliers.create');
     }
 
     /**
@@ -27,7 +28,18 @@ class SupplierController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'name' => 'required'
+        ]);
+
+        Supplier::create([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'address' => $request->address
+        ]);
+
+        return redirect()->route('products.create')
+            ->with('success', 'Supplier added successfully!');
     }
 
     /**

@@ -8,6 +8,16 @@
     <div class="py-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
+            <!-- 🔹 FILTERS -->
+            <form method="GET" class="flex flex-wrap gap-3 bg-white p-4 rounded-xl shadow">
+                <input type="date" name="start_date" value="{{ $startDate }}" class="border rounded px-3 py-2">
+                <input type="date" name="end_date" value="{{ $endDate }}" class="border rounded px-3 py-2">
+
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg">
+                    Apply Filter
+                </button>
+            </form>
+
             <!-- 🔹 KPI CARDS -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
@@ -16,6 +26,9 @@
                     <h3 class="text-2xl font-bold text-green-600">
                         Rp {{ number_format($totalRevenue) }}
                     </h3>
+                    <p class="text-sm mt-1 {{ $revenueGrowth >= 0 ? 'text-green-500' : 'text-red-500' }}">
+                        {{ number_format($revenueGrowth, 2) }}%
+                    </p>
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl shadow">
@@ -23,6 +36,9 @@
                     <h3 class="text-2xl font-bold text-blue-600">
                         Rp {{ number_format($totalProfit) }}
                     </h3>
+                    <p class="text-sm text-gray-500">
+                        Margin: {{ number_format($profitMargin, 2) }}%
+                    </p>
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl shadow">
@@ -30,6 +46,9 @@
                     <h3 class="text-2xl font-bold">
                         {{ $totalOrders }}
                     </h3>
+                    <p class="text-sm text-gray-500">
+                        AOV: Rp {{ number_format($aov) }}
+                    </p>
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl shadow">
@@ -46,7 +65,7 @@
 
                 <!-- Chart -->
                 <div class="bg-white p-6 rounded-2xl shadow">
-                    <h2 class="text-lg font-semibold mb-4">📈 Monthly Revenue</h2>
+                    <h2 class="text-lg font-semibold mb-4">📈 Revenue Trend</h2>
                     <canvas id="revenueChart"></canvas>
                 </div>
 
@@ -104,9 +123,9 @@
                 <h2 class="text-lg font-semibold mb-3">🧠 AI Business Insights</h2>
 
                 @if(count($insights) > 0)
-                    <ul class="list-disc pl-5 space-y-1">
+                    <ul class="list-disc pl-5 space-y-2">
                         @foreach($insights as $insight)
-                            <li>{{ $insight }}</li>
+                            <li class="leading-relaxed">{{ $insight }}</li>
                         @endforeach
                     </ul>
                 @else
@@ -131,10 +150,10 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Daily Revenue',
+                    label: 'Revenue',
                     data: values,
                     borderWidth: 2,
-                    tension: 0.3 // smooth curve (nice touch)
+                    tension: 0.3
                 }]
             }
         });

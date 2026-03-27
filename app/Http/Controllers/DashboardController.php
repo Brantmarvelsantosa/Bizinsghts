@@ -8,66 +8,106 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Services\InsightService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
 
 class DashboardController extends Controller
 {
-    public function index(InsightService $insightService)
+    public function index(Request $request, InsightService $insightService)
     {
-        $insights = $insightService->generateInsights();
-        // 💰 Total Revenue (paid orders only)
-        $totalRevenue = Order::where('status', 'paid')->sum('total');
+        // 🔹 1. FILTERS (IMPORTANT)
+        $startDate = $request->start_date ?? now()->startOfMonth();
+        $endDate   = $request->end_date ?? now();
 
-        // 📈 Total Profit (from order items)
-        $totalProfit = OrderItem::sum('profit');
+        // Base query (reuse everywhere)
+        $orderQuery = Order::whereBetween('order_date', [$startDate, $endDate]);
+
+        // 💰 Total Revenue (paid only)
+        $totalRevenue = (clone $orderQuery)
+            ->where('status', 'paid')
+            ->sum('total');
+
+        // 📈 Total Profit
+        $totalProfit = OrderItem::whereHas('order', function ($q) use ($startDate, $endDate) {
+            $q->whereBetween('order_date', [$startDate, $endDate])
+              ->where('status', 'paid');
+        })->sum('profit');
 
         // 🧾 Total Orders
-        $totalOrders = Order::count();
+        $totalOrders = (clone $orderQuery)->count();
 
         // 👥 Total Customers
         $totalCustomers = Customer::count();
 
-        // 📦 Low Stock Products
+        // 📊 Advanced KPIs
+        $aov = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0;
+        $profitMargin = $totalRevenue > 0 ? ($totalProfit / $totalRevenue) * 100 : 0;
+
+        // 📦 Low Stock
         $lowStockProducts = Product::where('stock', '<', 10)->get();
 
-        // 📈 Monthly revenue trend
-        $monthlyRevenue = Order::select(
-            DB::raw('MONTH(order_date) as month'),
-            DB::raw('SUM(total) as revenue')
-        )
-        ->where('status', 'paid')
-        ->groupBy('month')
-        ->orderBy('month')
-        ->get();
+        // 📈 Daily Revenue (for chart)
+        $dailyRevenue = (clone $orderQuery)
+            ->selectRaw('DATE(order_date) as date, SUM(total) as revenue')
+            ->where('status', 'paid')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
 
-        // Daily revenue trend
-        $dailyRevenue = DB::table('orders')
-        ->selectRaw('DATE(order_date) as date, SUM(total) as revenue')
-        ->where('status', 'paid')
-        ->groupBy('date')
-        ->orderBy('date')
-        ->get();
+        // 📈 Monthly Revenue
+        $monthlyRevenue = (clone $orderQuery)
+            ->selectRaw('MONTH(order_date) as month, SUM(total) as revenue')
+            ->where('status', 'paid')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
 
-        // 🏆 Best-selling products
+        // 🏆 Top Products
         $topProducts = OrderItem::select(
-            'product_id',
-            DB::raw('SUM(quantity) as total_sold')
-        )
-        ->groupBy('product_id')
-        ->orderByDesc('total_sold')
-        ->with('product')
-        ->take(5)
-        ->get();
+                'product_id',
+                DB::raw('SUM(quantity) as total_sold')
+            )
+            ->whereHas('order', function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('order_date', [$startDate, $endDate])
+                  ->where('status', 'paid');
+            })
+            ->groupBy('product_id')
+            ->orderByDesc('total_sold')
+            ->with('product')
+            ->take(5)
+            ->get();
 
-        // Payment Method Distribution
-        // This will show how many times each payment method is used
+        // 💳 Payment Distribution
         $paymentMethods = Payment::select(
-            'method',
-            DB::raw('COUNT(*) as total')
-        )
-        ->groupBy('method')
-        ->get();
+                'method',
+                DB::raw('COUNT(*) as total')
+            )
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->groupBy('method')
+            ->get();
+
+        // 📈 Growth (compare with previous period)
+        $previousRevenue = Order::whereBetween('order_date', [
+                now()->parse($startDate)->subDays(
+                    now()->parse($startDate)->diffInDays($endDate)
+                ),
+                $startDate
+            ])
+            ->where('status', 'paid')
+            ->sum('total');
+
+        $revenueGrowth = $previousRevenue > 0
+            ? (($totalRevenue - $previousRevenue) / $previousRevenue) * 100
+            : 0;
+
+        // 🧠 AI Insights (pass extra data)
+        $insights = $insightService->generateInsights([
+            'revenue' => $totalRevenue,
+            'profit' => $totalProfit,
+            'orders' => $totalOrders,
+            'growth' => $revenueGrowth,
+            'low_stock' => $lowStockProducts->count()
+        ]);
 
         return view('dashboard.index', compact(
             'totalRevenue',
@@ -76,10 +116,17 @@ class DashboardController extends Controller
             'totalCustomers',
             'lowStockProducts',
             'monthlyRevenue',
+            'dailyRevenue',
             'topProducts',
             'paymentMethods',
             'insights',
-            'dailyRevenue',
+
+            // 🔥 new metrics
+            'aov',
+            'profitMargin',
+            'revenueGrowth',
+            'startDate',
+            'endDate'
         ));
     }
 }
